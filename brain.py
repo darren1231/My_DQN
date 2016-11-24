@@ -59,6 +59,53 @@ class Brain():
     
         Q_max=tf.reduce_max(readout)
         tf.scalar_summary('Q_max', Q_max)
+        variable = tf.all_variables()
     
-        return s, readout
+        return s, readout,variable
+    
+    def create_new_Network(self):
+        # network weights
+        W_conv1 = self.weight_variable([8, 8, 4, 32])
+        b_conv1 = self.bias_variable([32])
+    
+        W_conv2 = self.weight_variable([4, 4, 32, 64])
+        b_conv2 = self.bias_variable([64])
+    
+        W_conv3 = self.weight_variable([3, 3, 64, 64])
+        b_conv3 = self.bias_variable([64])
+        
+        W_fc1 = self.weight_variable([1600, 512])
+        b_fc1 = self.bias_variable([512])
+    
+        W_fc2 = self.weight_variable([512, self.actions])
+        b_fc2 = self.bias_variable([self.actions])
+    
+        # input layer
+        s = tf.placeholder("float", [None, 80, 80, 4])
+    
+        # hidden layers
+        h_conv1 = tf.nn.relu(self.conv2d(s, W_conv1, 4) + b_conv1)
+        h_pool1 = self.max_pool_2x2(h_conv1)
+    
+        h_conv2 = tf.nn.relu(self.conv2d(h_pool1, W_conv2, 2) + b_conv2)
+        #h_pool2 = max_pool_2x2(h_conv2)
+    
+        h_conv3 = tf.nn.relu(self.conv2d(h_conv2, W_conv3, 1) + b_conv3)
+        #h_pool3 = max_pool_2x2(h_conv3)
+    
+        #h_pool3_flat = tf.reshape(h_pool3, [-1, 256])
+        h_conv3_flat = tf.reshape(h_conv3, [-1, 1600])
+    
+        h_fc1 = tf.nn.relu(tf.matmul(h_conv3_flat, W_fc1) + b_fc1)
+    
+        # readout layer
+        readout = tf.matmul(h_fc1, W_fc2) + b_fc2
+    
+        Q_max=tf.reduce_max(readout)
+        tf.scalar_summary('Q_max', Q_max)
+        variable = tf.all_variables()
+    
+        return s, readout,variable
+    
+    
     

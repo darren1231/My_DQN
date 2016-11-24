@@ -64,7 +64,7 @@ def sencond2time(senconds):
     
     
 
-def trainNetwork(s, readout,sess,merged,writer):
+def trainNetwork(s, readout,sess):
 
     
     # define the cost function
@@ -100,12 +100,12 @@ def trainNetwork(s, readout,sess,merged,writer):
     
     #saver.restore(sess, "new_networks/pong-dqn-"+str(pretrain_number))    
     
-    if checkpoint and checkpoint.model_checkpoint_path:
-        saver.restore(sess, checkpoint.model_checkpoint_path)
-	#saver.restore(sess, "my_networks/pong-dqn-26000")
-        print "Successfully loaded:", checkpoint.model_checkpoint_path
-    else:
-        print "Could not find old network weights"
+#    if checkpoint and checkpoint.model_checkpoint_path:
+#        saver.restore(sess, checkpoint.model_checkpoint_path)
+#	#saver.restore(sess, "my_networks/pong-dqn-26000")
+#        print "Successfully loaded:", checkpoint.model_checkpoint_path
+#    else:
+#        print "Could not find old network weights"
     
     print "Press any key and Enter to continue:"
     raw_input()
@@ -193,8 +193,8 @@ def trainNetwork(s, readout,sess,merged,writer):
             diff_seconds=(now-start).seconds
             time_text=sencond2time(diff_seconds)
             
-            result = sess.run(merged,feed_dict = {s : [s_t]})
-            writer.add_summary(result, t+pretrain_number)
+#            result = sess.run(merged,feed_dict = {s : [s_t]})
+#            writer.add_summary(result, t+pretrain_number)
             a_file.write(str(t+pretrain_number)+','+",".join([str(x) for x in readout_t]) + \
             ','+str(total_score)+ ','+str(positive_score) \
             +','+time_text+'\n')
@@ -222,15 +222,98 @@ def trainNetwork(s, readout,sess,merged,writer):
 def playGame():
     sess = tf.InteractiveSession()
     brain_net = net.Brain(3)
-    s, readout = brain_net.createNetwork()
-
-    merged = tf.merge_all_summaries()
-    writer = tf.train.SummaryWriter(tensorboard_path, sess.graph)
+    Target_net_brain=net.Brain(3)
+    s, readout,variable = brain_net.createNetwork()
+    s_new, readout_new,variable_new = brain_net.create_new_Network()
     
-    trainNetwork(s, readout,sess,merged,writer)
+    for i in range(len(variable)):
+        print variable[i].get_shape()
+    #s_T, readout_T,W_conv1_T,b_conv1_T,W_conv2_T,b_conv2_T,W_conv3_T,b_conv3_T,W_fc1_T,b_fc1_T,W_fc2_T,b_fc2_T = Target_net_brain.createNetwork()
 
+#    merged = tf.merge_all_summaries()
+#    writer = tf.train.SummaryWriter(tensorboard_path, sess.graph)
+    
+    trainNetwork(s, readout,sess)
+    
+def loadnet():
+    sess = tf.InteractiveSession()
+    brain_net = net.Brain(3)
+    s, readout,variable = brain_net.createNetwork()
+    
+    init = tf.initialize_all_variables()
+    sess.run(init)
+    
+    new_variable_list=sess.run(variable)
+    
+    print new_variable_list[1]
+    
+    saver = tf.train.Saver()
+    saver.restore(sess, "Old_net/pong-dqn-1320000_train_hit")
+        
+    old_variable = tf.all_variables()
+    old_variable_list=sess.run(old_variable)
+    
+    
+    print old_variable_list[1]
+    
+    
+#    for i in range(0,len(old_variable_list),2):
+#        print "w",old_variable_list[i].shape,    "\n"
+#        print "b",old_variable_list[i+1].shape,"\n"
+    
+    for i in range(len(old_variable)):
+        assing_op=tf.assign(variable[i],old_variable[i])
+        sess.run(assing_op)
+    
+    new_variable_list=sess.run(variable)
+    print new_variable_list[1]
+    
+    "Implement..........................."   
+    game_state = game.GameState()
+    
+    # get the first state by doing nothing and preprocess the image to 80x80x4
+    do_nothing = np.zeros(ACTIONS)
+    do_nothing[0] = 1
+    x_t, r_0, terminal = game_state.frame_step(do_nothing)
+    x_t = cv2.cvtColor(cv2.resize(x_t, (80, 80)), cv2.COLOR_BGR2GRAY)
+    ret, x_t = cv2.threshold(x_t,1,255,cv2.THRESH_BINARY)
+    s_t = np.stack((x_t, x_t, x_t, x_t), axis = 2)
+    
+    a_file = open(out_put_path  + "/readout.txt", 'w')
+    t=0
+    total_score=0
+    # get the first state by doing nothing and preprocess the image to 80x80x4
+    while True:
+        
+        readout_t = readout.eval(feed_dict = {s : [s_t]})[0]            
+    
+        a_t = np.zeros([ACTIONS])
+        action_index = 0
+        
+        action_index = np.argmax(readout_t)
+        a_t[action_index] = 1
+        
+        x_t1_col, r_t, terminal = game_state.frame_step(a_t)
+        x_t1 = cv2.cvtColor(cv2.resize(x_t1_col, (80, 80)), cv2.COLOR_BGR2GRAY)
+        ret, x_t1 = cv2.threshold(x_t1,1,255,cv2.THRESH_BINARY)
+        x_t1 = np.reshape(x_t1, (80, 80, 1))
+        s_t1 = np.append(x_t1, s_t[:,:,0:3], axis = 2)
+    
+        s_t = s_t1
+        t=t+1
+        
+        total_score=total_score+r_t;
+        
+        a_file.write(str(t)+','+",".join([str(x) for x in readout_t]) +','+str(total_score)+'\n')
+        
+        print "TIMESTEP:", t, "/ ACTION:", action_index, "/ REWARD:", r_t, "/ Q_MAX: %e" % np.max(readout_t)
+        print 'Total score:',total_score,'   up:',readout_t[0],'    down:',readout_t[1],'  no:',readout_t[2]
+    
+    #trainNetwork(s, readout,sess)
+#    variable = tf.all_variables()
+#    variable_list=sess.run(variable)
 def main():
-    playGame()
+    loadnet()
 
 if __name__ == "__main__":
     main()
